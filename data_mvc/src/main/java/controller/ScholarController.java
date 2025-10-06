@@ -1,81 +1,83 @@
 package controller;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import model.Article;
 import model.Author;
+import view.ScholarView;
 
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URLEncoder;
-import java.net.URL;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Scanner;
 
+/**
+ * Controller class that fetches author data from Google Scholar via SerpApi
+ * and updates the model and view.
+ */
 public class ScholarController {
+    private Author model;
+    private ScholarView view;
+    private final String apiKey = "d65137a57c3fa3ca707fecec4cca7de398f6d4deb73d9d92fbe0e8c52a114513"; // Replace with your real SerpApi key
 
-    private static final String API_KEY = "d65137a57c3fa3ca707fecec4cca7de398f6d4deb73d9d92fbe0e8c52a114513";
-    private static final String API_URL = "https://serpapi.com/search.json?engine=google_scholar_profiles&q=";
+    public ScholarController(Author model, ScholarView view) {
+        this.model = model;
+        this.view = view;
+    }
 
-    public List<Author> searchAuthors(String query) {
-        List<Author> authors = new ArrayList<>();
-
+    /**
+     * Fetches author data from SerpApi and updates the model and view.
+     *
+     * @param authorId Google Scholar Author ID.
+     */
+    public void fetchAuthorData(String authorId) {
         try {
-            String encodedQuery = URLEncoder.encode(query, "UTF-8");
-            URL url = new URL(API_URL + encodedQuery + "&api_key=" + API_KEY);
+            String url = "https://serpapi.com/search?engine=google_scholar_author&author_id="
+                    + authorId + "&api_key=" + apiKey;
 
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.connect();
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
 
-            int responseCode = conn.getResponseCode();
-            if (responseCode != 200) {
-                System.err.println("❌ Error en la conexión. Código HTTP: " + responseCode);
-                return authors;
-            }
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-            // Leer respuesta JSON
-            StringBuilder response = new StringBuilder();
-            Scanner scanner = new Scanner(url.openStream());
-            while (scanner.hasNext()) {
-                response.append(scanner.nextLine());
-            }
-            scanner.close();
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(response.body());
 
-            // Parsear respuesta con Gson
-            JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-            JsonArray profiles = jsonResponse.getAsJsonArray("profiles");
+            // ----------- Author data -----------
+            model.setName(node.path("author").path("name").asText("Unknown"));
+            model.setAffiliation(node.path("author").path("affiliations").asText("No affiliation"));
 
-            if (profiles == null || profiles.isEmpty()) {
-                System.out.println("⚠️ No se encontraron autores con ese nombre.");
-                return authors;
-            }
+            // ----------- Articles -----------
+            List<Article> articles = new ArrayList<>();
+            JsonNode articlesNode = node.path("articles");
 
-            for (JsonElement profileElem : profiles) {
-                JsonObject profile = profileElem.getAsJsonObject();
+            if (articlesNode.isArray()) {
+                for (JsonNode articleNode : articlesNode) {
+                    String title = articleNode.path("title").asText("Untitled");
+                    String authors = articleNode.path("authors").asText("Unknown authors");
+                    String publicationDate = articleNode.path("year").asText("N/A");
+                    String link = articleNode.path("link").asText("");
 
-                String name = profile.has("name") ? profile.get("name").getAsString() : "Desconocido";
-                String affiliation = profile.has("affiliations") ? profile.get("affiliations").getAsString() : "N/A";
-                int citedBy = 0;
-
-                if (profile.has("cited_by")) {
-                    JsonObject citedByObj = profile.getAsJsonObject("cited_by");
-                    if (citedByObj.has("value")) {
-                        citedBy = citedByObj.get("value").getAsInt();
-                    }
+                    Article article = new Article(
+                            title, authors, publicationDate, "", link, "", 0 // abstract, keywords, citedBy removed
+                    );
+                    articles.add(article);
                 }
-
-                authors.add(new Author(name, affiliation, citedBy));
             }
 
-        } catch (IOException e) {
-            System.err.println("🚨 Error al conectar con la API: " + e.getMessage());
-        } catch (Exception e) {
-            System.err.println("🚨 Error al procesar la respuesta: " + e.getMessage());
-        }
+            model.setArticles(articles);
 
-        return authors;
+            // ----------- Display on view -----------
+            view.displayAuthor(model);
+
+        } catch (IOException | InterruptedException e) {
+            System.err.println("Error fetching data: " + e.getMessage());
+        }
     }
 }

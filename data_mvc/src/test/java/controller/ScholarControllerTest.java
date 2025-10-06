@@ -17,10 +17,10 @@ public class ScholarControllerTest {
         ScholarController controller = new ScholarController(author, view);
 
         // Simular actualización de datos
-        author.setName("Colton");
+        author.setName("Ana Chang");
         author.setHIndex(10);
 
-        assertEquals("Colton", author.getName());
+        assertEquals("Ana Chang", author.getName());
         assertEquals(10, author.getHIndex());
     }
 }
