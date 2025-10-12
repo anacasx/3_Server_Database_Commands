@@ -1,4 +1,5 @@
 import controller.ScholarController;
+import database.DatabaseManager;
 import model.Author;
 import view.ScholarView;
 
@@ -6,34 +7,37 @@ import java.util.ArrayList;
 import java.util.Scanner;
 
 /**
- * Main entry point of the program.
+ * Main entry point for the Scholar project.
  */
 public class Main {
     public static void main(String[] args) {
-        Author author = new Author("Unknown", "N/A", new ArrayList<>());
+        DatabaseManager dbManager = new DatabaseManager();
+        dbManager.initializeDatabase();
+
         ScholarView view = new ScholarView();
-        ScholarController controller = new ScholarController(author, view);
-
         Scanner scanner = new Scanner(System.in);
-        String authorId = "";
 
-        do {
+        for (int i = 1; i <= 2; i++) {
             System.out.print("\n*few for testing purposes*\n" +
                     "OQpf9YsAAAAJ\n" +
                     "-dVjqTEAAAAJ\n" +
                     "JicYPdAAAAAJ\n" +
                     "q2YXPSgAAAAJ\n\n" +
                     "Enter the Author ID: ");
-            authorId = scanner.nextLine().trim();
+            String authorId = scanner.nextLine().trim();
 
-            if (authorId.isEmpty()) {
-                System.out.println("Author ID cannot be empty. Please try again.");
-            }
-        } while (authorId.isEmpty());
+            Author author = new Author("Unknown", "N/A", new ArrayList<>());
+            ScholarController controller = new ScholarController(author, view);
 
-        System.out.println("\nFetching author data...");
-        controller.fetchAuthorData(authorId);
+            System.out.println("\nFetching author data...");
+            controller.fetchAuthorData(authorId);
 
+            // Save only the first 3 articles
+            var articles = author.getArticles().subList(0, Math.min(3, author.getArticles().size()));
+            dbManager.saveArticles(author.getName(), articles);
+        }
+
+        dbManager.displayAllArticles();
         scanner.close();
     }
 }
